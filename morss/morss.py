@@ -89,6 +89,9 @@ except ImportError:
     import breadability.readable
 
     def readability(html, url=None, encoding=False):
+        # Encoding is (currently) ignored by breadability.
+        # It was added to provide the same method signature as for readability above.
+        # Encoding is fixed by morss.
         return breadability.readable.Article(html, url=url).readable
 
 
