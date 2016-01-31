@@ -82,12 +82,13 @@ def log(txt, force=False):
 try:
     from readability.readability import Document
 
-    def readability(html, url=None):
-        return Document(html, url=url).summary()
+    def readability(html, url=None, encoding=False):
+        return Document(html, url=url).summary(
+                override_encoding=(None if not encoding else encoding))
 except ImportError:
     import breadability.readable
 
-    def readability(html, url=None):
+    def readability(html, url=None, encoding=False):
         return breadability.readable.Article(html, url=url).readable
 
 
@@ -144,10 +145,11 @@ def parseOptions(options):
 
 default_handlers = [crawler.GZIPHandler(), crawler.UAHandler(DEFAULT_UA),
                     crawler.AutoRefererHandler(), crawler.HTTPEquivHandler(),
-                    crawler.HTTPRefreshHandler(), crawler.EncodingFixHandler()]
+                    crawler.HTTPRefreshHandler()]
 
-def custom_handler(accept, delay=DELAY):
+def custom_handler(accept, delay=DELAY, encoding_ovrride=False):
     handlers = default_handlers[:]
+    handlers.append(crawler.EncodingFixHandler(encoding_ovrride))
     handlers.append(crawler.ContentNegociationHandler(accept))
     handlers.append(crawler.SQliteCacheHandler(delay))
 
@@ -281,7 +283,7 @@ def Fill(item, options, feedurl='/', fast=False):
         delay = -2
 
     try:
-        con = custom_handler(('html', 'text/*'), delay).open(link, timeout=TIMEOUT)
+        con = custom_handler(('html', 'text/*'), delay, options.encoding).open(link, timeout=TIMEOUT)
         data = con.read()
 
     except (IOError, HTTPException) as e:
@@ -293,7 +295,7 @@ def Fill(item, options, feedurl='/', fast=False):
         log('non-text page')
         return True
 
-    out = readability(data, con.url)
+    out = readability(data, con.url, encoding=options.encoding)
 
     if options.hungry or count_words(out) > max(count_content, count_desc):
         item.push_content(out)
