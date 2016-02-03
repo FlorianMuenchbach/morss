@@ -462,7 +462,7 @@ def Gather(rss, url, options):
                 log('Thread Error: %s' % e.message)
             queue.task_done()
 
-    def worker(i, item):
+    def worker(i, item, start_time, lim_item, lim_time, max_item, max_time):
         if time.time() - start_time > lim_time >= 0 or i + 1 > lim_item >= 0:
             log('dropped')
             item.remove()
@@ -492,7 +492,7 @@ def Gather(rss, url, options):
         if threads == 1 or num_running_threads <= 0:
             worker(*[i, item])
         else:
-            queue.put([i, item])
+            queue.put([i, item, start_time, lim_item, lim_time, max_item, max_time])
 
     if threads != 1:
         queue.join()
