@@ -1,5 +1,5 @@
 lxml
-git+git://github.com/bookieio/breadability.git
+git+git://github.com/FlorianMuenchbach/python-readability.git@override_encoding
 python-dateutil <= 1.5
 html2text
 ordereddict
