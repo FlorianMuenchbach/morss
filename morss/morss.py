@@ -47,6 +47,9 @@ THREADS = 10  # number of threads (1 for single-threaded)
 DEBUG = False
 PORT = 8080
 
+RUNNING_THREADS = []
+JOB_QUEUE = None
+
 DEFAULT_UA = 'Mozilla/5.0 (X11; Linux x86_64; rv:25.0) Gecko/20100101 Firefox/25.0'
 
 MIMETYPE = {
@@ -379,8 +382,53 @@ def Fetch(url, options):
 
     return rss
 
+#class SimpleWorkerManager:
+#    def __init__(self, queue, max_threads):
+#        self._queue         = queue
+#        self._max_threads   = max(max_threads, 0)
+#        self._worker_threads = []
+#        self._lock          = threading.Lock()
+#
+#    # set
+#    def _runner(queue, function):
+#        while True:
+#            value = queue.get()
+#            if value is None:
+#                break
+#            try:
+#                worker(*value)
+#            except Exception as e:
+#                log('Thread Error: %s' % e.message)
+#            queue.task_done()
+#
+#    def is_ready(self):
+#        ready = False
+#        self._lock.acquire()
+#
+#        self._lock.release()
+#
+#    def restart_workers(self, worker_function):
+#        self._lock.acquire()
+#        threads_to_start = (self._max_threads - len(self._worker_threads))
+#        if (threads_to_start > 0):
+#            # TODO how do we get notified if a thread dies/stops working?
+#            # iterate and call isAlive()?
+#            for i in range(threads_to_start):
+#                t = threading.Thread(target=runner, args=(self._queue,))
+#                t.daemon = True
+#                self._worker_threads.append(t)
+#                t.start()
+#        self._lock.release()
+#
+#
+#
 
 def Gather(rss, url, options):
+    #TODO This function is not reentrant. (And never was.)
+    # Add a lock to it to use it in a server that can handle more than one request at a time.
+    global RUNNING_THREADS
+    global JOB_QUEUE
+
     size = len(rss.items)
     start_time = time.time()
 
@@ -390,6 +438,11 @@ def Gather(rss, url, options):
     max_item = MAX_ITEM
     max_time = MAX_TIME
     threads = THREADS
+    num_running_threads = len(RUNNING_THREADS)
+
+    if JOB_QUEUE is None:
+        JOB_QUEUE = Queue()
+    queue = JOB_QUEUE
 
     if options.cache:
         max_time = 0
@@ -401,6 +454,8 @@ def Gather(rss, url, options):
     def runner(queue):
         while True:
             value = queue.get()
+            if value is None:
+                break
             try:
                 worker(*value)
             except Exception as e:
@@ -424,15 +479,17 @@ def Gather(rss, url, options):
             if not options.proxy:
                 Fill(item, options, url)
 
-    queue = Queue()
 
-    for i in range(threads):
-        t = threading.Thread(target=runner, args=(queue,))
-        t.daemon = True
-        t.start()
+    if num_running_threads < threads:
+        for i in range(threads - num_running_threads):
+            t = threading.Thread(target=runner, args=(queue,))
+            RUNNING_THREADS.append(t)
+            t.daemon = True
+            t.start()
+        num_running_threads = len(RUNNING_THREADS)
 
     for i, item in enumerate(list(rss.items)):
-        if threads == 1:
+        if threads == 1 or num_running_threads <= 0:
             worker(*[i, item])
         else:
             queue.put([i, item])
